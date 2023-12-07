@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 ## 3.0.0
 
  - Feat: Added more game objects. ([#32](https://github.com/screepers/screeps-profiler/pull/32))
@@ -9,6 +10,12 @@
  - Internal: Added additional tests, increasing coverage. ([#32](https://github.com/screepers/screeps-profiler/pull/32))
  - Internal: Switched to GitHub Actions instead of Travis. ([#32](https://github.com/screepers/screeps-profiler/pull/32))
  - Internal: Added logging on profiler start or empty profile. ([#32](https://github.com/screepers/screeps-profiler/pull/32))
+=======
+## 2.0.2
+
+- New: Update methods and objects.
+- Fix: Work in simulation.
+>>>>>>> 71761e6 (Add intent tracking to the profile)
 
 ## 2.0.1
 
