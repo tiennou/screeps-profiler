@@ -1,20 +1,22 @@
-'use strict';
-
-let start = Date.now();
-resetGlobals(); // needs to be called before requiring the profiler.
-const profiler = require('../screeps-profiler');
+import { AnyFunction, ProfiledFunction } from '../src/profiler';
+import { profiler, ProfilerError } from '../src/screeps-profiler';
+import { setup } from './setup';
 
 beforeEach(() => {
-  resetGlobals();
-  start = Date.now();
+  setup();
 });
 
-function add(a, b) {
+function add(a: number, b: number) {
   return a + b;
 }
 
-function returnsScope() {
+function returnsScope(this: object) {
   return this;
+}
+
+// eslint-disable-next-line @typescript-eslint/ban-types
+function profilerFn<T extends AnyFunction>(fn: T): ProfiledFunction<T> {
+  return fn as ProfiledFunction<T>;
 }
 
 function tick(times = 1) {
@@ -35,40 +37,40 @@ describe('screeps-profiler', () => {
       tick();
     });
 
-    describe('registerFN', () => {
+    describe('registerFunction', () => {
       it('returns a wrapped function', () => {
-        const result = profiler.registerFN(add);
+        const result = profiler.registerFunction(add);
         expect(typeof result).toBe('function');
-        expect(result.__profiler).not.toBeNull();
+        expect(profilerFn(result).__profiler).not.toBeNull();
       });
 
       it('returns a function with the same scope as the one passed in', () => {
         const passedScope = { test: 1 };
-        const result = profiler.registerFN(returnsScope.bind(passedScope));
+        const result = profiler.registerFunction(returnsScope.bind(passedScope));
         expect(result()).toBe(passedScope);
       });
 
 
       it('should attempt some toString() preservation', () => {
-        const result = profiler.registerFN(add);
+        const result = profiler.registerFunction(add);
         expect(result.toString().includes(add.toString())).toBe(true);
       });
 
       it('should preserve properties', () => {
         const func1 = function func1() {};
         func1.prop1 = 1;
-        const result1 = profiler.registerFN(func1);
+        const result1 = profiler.registerFunction(func1);
         expect(result1.prop1).toBe(func1.prop1);
 
         const func2 = () => {};
         func2.prop2 = 2;
-        const result2 = profiler.registerFN(func2);
+        const result2 = profiler.registerFunction(func2);
         expect(result2.prop2).toBe(func2.prop2);
       });
 
       it('should preserve constructor behavior', () => {
         class SomeClass {}
-        const ResultClass = profiler.registerFN(SomeClass);
+        const ResultClass = profiler.registerClass(SomeClass);
         expect(new ResultClass() instanceof SomeClass).toBe(true);
       });
     });
@@ -83,8 +85,8 @@ describe('screeps-profiler', () => {
         };
 
         profiler.registerObject(myObject);
-        expect(myObject.add.__profiler).not.toBeNull();
-        expect(myObject.returnsScope.__profiler).not.toBeNull();
+        expect(profilerFn(myObject.add).__profiler).not.toBeNull();
+        expect(profilerFn(myObject.returnsScope).__profiler).not.toBeNull();
       });
 
       it('correctly wraps getter/setter functions', () => {
@@ -100,8 +102,9 @@ describe('screeps-profiler', () => {
 
         profiler.registerObject(myObj);
         const descriptors = Object.getOwnPropertyDescriptor(myObj, 'someValue');
-        expect(descriptors.get.__profiler).not.toBeNull();
-        expect(descriptors.set.__profiler).not.toBeNull();
+        expect(descriptors).not.toBeUndefined()
+        expect(profilerFn((descriptors!)['get']!).__profiler).not.toBeNull();
+        expect(profilerFn((descriptors!)['set']!).__profiler).not.toBeNull();
         expect(myObj.someValue).toBe(5);
         myObj.someValue = 7;
         expect(myObj.someValue).toBe(7);
@@ -109,11 +112,11 @@ describe('screeps-profiler', () => {
 
       it('throws when registering an invalid object', () => {
         expect(() => {
-          profiler.registerObject(undefined);
-        }).toThrow(profiler.Error);
+          profiler.registerObject(undefined as unknown as object);
+        }).toThrow(ProfilerError);
         expect(() => {
-          profiler.registerObject('yo');
-        }).toThrow(profiler.Error);
+          profiler.registerObject('yo' as unknown as object);
+        }).toThrow(ProfilerError);
       });
     });
 
@@ -124,6 +127,7 @@ describe('screeps-profiler', () => {
           }
         }
         profiler.registerClass(MyFakeClass);
+        // eslint-disable-next-line @typescript-eslint/unbound-method
         expect(MyFakeClass.prototype.someFakeMethod).not.toBeNull();
       });
 
@@ -133,26 +137,27 @@ describe('screeps-profiler', () => {
           }
         }
         profiler.registerClass(MyFakeClass);
-        expect(MyFakeClass.someFakeStaticMethod.__profiler).not.toBeNull();
+        // eslint-disable-next-line @typescript-eslint/unbound-method
+        expect(profilerFn(MyFakeClass.someFakeStaticMethod).__profiler).not.toBeNull();
       });
     });
 
     describe('output', () => {
       it('does not explode if there are no profiled functions', () => {
         Game.profiler.profile(10);
-        expect(profiler.output).not.toThrow();
+        expect(() => profiler.output()).not.toThrow();
       });
 
       it('does not explode if there are no duration set', () => {
         Game.profiler.profile();
-        expect(profiler.output).not.toThrow();
+        expect(() => profiler.output()).not.toThrow();
       });
 
       it('correctly limits the length of the output', () => {
         Game.profiler.profile(10);
         let functionsWrappedAndRan = 0;
         while (functionsWrappedAndRan < 1000) {
-          const fn = profiler.registerFN(() => {}, `someFakeName${functionsWrappedAndRan}`);
+          const fn = profiler.registerFunction(() => {}, `someFakeName${functionsWrappedAndRan}`);
           fn();
           functionsWrappedAndRan++;
         }
@@ -167,8 +172,8 @@ describe('screeps-profiler', () => {
       it('can be in callgrind format', () => {
         Game.profiler.callgrind(10);
         const N = 5;
-        const someFakeFunction = profiler.registerFN(() => {}, 'someFakeFunction');
-        const someFakeParent = profiler.registerFN(() => someFakeFunction(), 'someFakeParent');
+        const someFakeFunction = profiler.registerFunction(() => {}, 'someFakeFunction');
+        const someFakeParent = profiler.registerFunction(() => someFakeFunction(), 'someFakeParent');
         for (let i = 0; i < N; ++i) {
           someFakeFunction();
           someFakeParent();
@@ -184,7 +189,7 @@ describe('screeps-profiler', () => {
       it('correctly count function calls', () => {
         Game.profiler.profile(10);
         const N = 5;
-        const someFakeFunction = profiler.registerFN(() => {}, 'someFakeFunction');
+        const someFakeFunction = profiler.registerFunction(() => {}, 'someFakeFunction');
         for (let i = 0; i < N; ++i) {
           someFakeFunction();
         }
@@ -194,8 +199,8 @@ describe('screeps-profiler', () => {
       it('correctly count parent function calls', () => {
         Game.profiler.profile(10);
         const N = 5;
-        const someFakeFunction = profiler.registerFN(() => {}, 'someFakeFunction');
-        const someFakeParent = profiler.registerFN(() => someFakeFunction(), 'someFakeParent');
+        const someFakeFunction = profiler.registerFunction(() => {}, 'someFakeFunction');
+        const someFakeParent = profiler.registerFunction(() => someFakeFunction(), 'someFakeParent');
         for (let i = 0; i < N; ++i) {
           someFakeFunction();
           someFakeParent();
@@ -223,7 +228,7 @@ describe('screeps-profiler', () => {
       });
 
       it('can start in background mode', () => {
-        Game.profiler.background(1);
+        Game.profiler.background();
         tick(2);
       });
 
@@ -246,65 +251,3 @@ describe('screeps-profiler', () => {
     });
   });
 });
-
-function resetGlobals() {
-  global.Game = {
-    cpu: {
-      getUsed() {
-        return Date.now() - start;
-      },
-    },
-    notify(msg) {
-      return msg;
-    },
-    shard: { name: 'test' },
-    rooms: {},
-    time: 10,
-    map: {},
-    market: {},
-  };
-  global.Memory = {};
-
-  global.ConstructionSite = class {};
-  global.Creep = class {};
-  global.Deposit = class {};
-  global.Flag = class {};
-  global.InterShardMemory = class {};
-  global.Mineral = class {};
-  global.Nuke = class {};
-  global.OwnedStructure = class {};
-  global.PathFinder = class {};
-  global.PowerCreep = class {};
-  global.RawMemory = class {};
-  global.Resource = class {};
-  global.Room = class {};
-  global.RoomObject = class {};
-  global.RoomPosition = class {};
-  global.RoomVisual = class {};
-  global.Ruin = class {};
-  global.Source = class {};
-  global.Store = class {};
-  global.Structure = class {};
-  global.StructureContainer = class {};
-  global.StructureController = class {};
-  global.StructureExtension = class {};
-  global.StructureExtractor = class {};
-  global.StructureFactory = class {};
-  global.StructureInvaderCore = class {};
-  global.StructureKeeperLair = class {};
-  global.StructureLab = class {};
-  global.StructureLink = class {};
-  global.StructureNuker = class {};
-  global.StructureObserver = class {};
-  global.StructurePortal = class {};
-  global.StructurePowerBank = class {};
-  global.StructurePowerSpawn = class {};
-  global.StructureRampart = class {};
-  global.StructureRoad = class {};
-  global.StructureSpawn = class {};
-  global.StructureStorage = class {};
-  global.StructureTerminal = class {};
-  global.StructureTower = class {};
-  global.StructureWall = class {};
-  global.Tombstone = class {};
-}
