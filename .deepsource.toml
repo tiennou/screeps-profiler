@@ -1,0 +1,10 @@
+version = 1
+
+test_patterns = ["__tests__/*.js"]
+
+[[analyzers]]
+name = "javascript"
+
+  [analyzers.meta]
+  environment = ["nodejs"]
+  globals = ["ConstructionSite", "Creep", "Deposit", "Flag", "Game", "InterShardMemory", "Memory", "Mineral", "Nuke", "OwnedStructure", "PathFinder", "PowerCreep", "RawMemory", "Resource", "Room", "RoomObject", "RoomPosition", "RoomVisual", "Ruin", "Source", "Store", "Structure", "StructureContainer", "StructureController", "StructureExtension", "StructureExtractor", "StructureFactory", "StructureInvaderCore", "StructureKeeperLair", "StructureLab", "StructureLink", "StructureNuker", "StructureObserver", "StructurePortal", "StructurePowerBank", "StructurePowerSpawn", "StructureRampart", "StructureRoad", "StructureSpawn", "StructureStorage", "StructureTerminal", "StructureTower", "StructureWall", "Tombstone", ]
